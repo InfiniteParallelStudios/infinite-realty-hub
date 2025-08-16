@@ -64,8 +64,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     };
 
-    // Small delay to ensure Supabase is ready
-    setTimeout(getInitialSession, 100);
+    // Initialize session immediately
+    getInitialSession();
 
     // Listen for auth changes
     console.log('AuthContext: Setting up auth listener...');
@@ -116,7 +116,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin + '/(tabs)',
+        redirectTo: `${window.location.origin}/(tabs)`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
       },
     });
     return { error };

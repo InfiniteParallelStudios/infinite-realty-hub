@@ -9,8 +9,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    detectSessionInUrl: true, // Enable session detection in URL for OAuth callbacks
+    storage: window?.localStorage, // Simplified storage configuration for Expo web
   },
 });
 
