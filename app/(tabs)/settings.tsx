@@ -12,28 +12,50 @@ export default function SettingsScreen() {
   console.log('Settings screen - user:', user?.email || 'No user', 'loading:', loading);
 
   const handleSignOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Sign Out', 
-          style: 'destructive',
-          onPress: async () => {
-            await signOut();
-          }
-        }
-      ]
-    );
+    try {
+      const result = await signOut();
+      
+      if (result?.error) {
+        alert('Sign Out Failed: ' + (result.error.userMessage || result.error.message || 'Unable to sign out'));
+      } else {
+        // Force navigation after a brief delay
+        setTimeout(() => {
+          router.replace('/auth/login');
+        }, 100);
+      }
+    } catch (error) {
+      console.error('Sign out error:', error);
+      let errorMessage = 'Failed to sign out. Please try again.';
+      
+      if (error?.message?.includes('network') || error?.message?.includes('fetch')) {
+        errorMessage = 'Network error during sign out. You have been signed out locally, but please check your connection.';
+      }
+      
+      alert('Sign Out Error: ' + errorMessage);
+      
+      // Even if signout fails, navigate to login for security
+      setTimeout(() => {
+        router.replace('/auth/login');
+      }, 1000);
+    }
   };
 
   const handleSignIn = () => {
-    router.push('/auth/login');
+    try {
+      router.push('/auth/login');
+    } catch (err) {
+      console.error('Navigation error:', err);
+      alert('Navigation Error: Unable to navigate to sign in page. Please refresh the page.');
+    }
   };
 
   const handleSignUp = () => {
-    router.push('/auth/signup');
+    try {
+      router.push('/auth/signup');
+    } catch (err) {
+      console.error('Navigation error:', err);
+      alert('Navigation Error: Unable to navigate to sign up page. Please refresh the page.');
+    }
   };
   
   if (loading) {
@@ -84,7 +106,11 @@ export default function SettingsScreen() {
               </View>
             </View>
             
-            <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+            <TouchableOpacity 
+              style={styles.signOutButton} 
+              onPress={handleSignOut}
+              activeOpacity={0.7}
+            >
               <Text style={styles.signOutButtonText}>Sign Out</Text>
             </TouchableOpacity>
           </View>

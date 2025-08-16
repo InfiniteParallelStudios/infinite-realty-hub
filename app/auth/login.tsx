@@ -4,6 +4,7 @@ import {
   Text, 
   TextInput, 
   TouchableOpacity, 
+  Pressable,
   StyleSheet, 
   Alert,
   ActivityIndicator 
@@ -18,56 +19,77 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const styles = createStyles(theme);
 
   const handleSignIn = async () => {
+    setError(''); // Clear previous errors
+    
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      setError('Please fill in all fields');
       return;
     }
 
     setIsLoading(true);
+    
     try {
-      console.log('Attempting to sign in with:', email);
       const result = await signIn(email, password);
-      console.log('Full sign in result:', result);
       
       if (result.error) {
-        console.error('Sign in error:', result.error);
-        Alert.alert('Sign In Failed', result.error.message || 'Unknown error occurred');
-      } else {
-        console.log('Sign in successful, navigating to tabs');
-        // Small delay to ensure auth state is updated
-        setTimeout(() => {
-          router.replace('/(tabs)');
-        }, 100);
+        setError(result.error.userMessage || result.error.message);
+      } else if (result.success) {
+        router.replace('/(tabs)');
       }
     } catch (err) {
-      console.error('Sign in exception:', err);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+      console.error('SignIn exception:', err);
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      
+      // Check for specific error types
+      if (err?.message?.includes('network') || err?.message?.includes('fetch')) {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (err?.message?.includes('timeout')) {
+        errorMessage = 'Request timed out. Please try again.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
+    setError(''); // Clear previous errors
     try {
       console.log('Attempting Google sign in');
-      const { error } = await signInWithGoogle();
-      if (error) {
-        console.error('Google sign in error:', error);
-        Alert.alert('Google Sign In Failed', error.message || 'Unknown error occurred');
+      const result = await signInWithGoogle();
+      if (result.error) {
+        console.error('Google sign in error:', result.error);
+        const errorMessage = result.error.userMessage || result.error.message || 'Google sign in failed';
+        setError(errorMessage);
       }
       // No need to redirect here as Google OAuth handles the redirect
     } catch (err) {
       console.error('Google sign in exception:', err);
-      Alert.alert('Error', 'Google sign in failed. Please try again.');
+      let errorMessage = 'Google sign in failed. Please try again.';
+      
+      if (err?.message?.includes('network') || err?.message?.includes('fetch')) {
+        errorMessage = 'Unable to connect to Google. Please check your internet connection and try again.';
+      } else if (err?.message?.includes('popup')) {
+        errorMessage = 'Google sign in popup was blocked. Please allow popups and try again.';
+      }
+      
+      setError(errorMessage);
     }
   };
 
   const navigateToSignUp = () => {
-    router.push('/auth/signup');
+    try {
+      router.push('/auth/signup');
+    } catch (err) {
+      console.error('Navigation error:', err);
+      setError('Unable to navigate to sign up page. Please refresh the page.');
+    }
   };
 
   return (
@@ -107,17 +129,31 @@ export default function LoginScreen() {
           />
         </View>
 
-        <TouchableOpacity 
-          style={styles.signInButton} 
-          onPress={handleSignIn}
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        <button
+          style={{
+            backgroundColor: theme.colors.primary,
+            color: 'white',
+            border: 'none',
+            borderRadius: theme.borderRadius.md,
+            padding: theme.spacing.md,
+            fontSize: theme.typography.fontSizes.lg,
+            fontWeight: theme.typography.fontWeights.semibold,
+            cursor: 'pointer',
+            width: '100%',
+            marginBottom: theme.spacing.lg,
+            boxShadow: '0 4px 8px rgba(0, 122, 255, 0.4)',
+          }}
+          onClick={handleSignIn}
           disabled={isLoading || loading}
         >
-          {isLoading || loading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.signInButtonText}>Sign In</Text>
-          )}
-        </TouchableOpacity>
+          {isLoading || loading ? 'Loading...' : 'Sign In'}
+        </button>
 
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
@@ -125,13 +161,16 @@ export default function LoginScreen() {
           <View style={styles.dividerLine} />
         </View>
 
-        <TouchableOpacity 
-          style={styles.googleButton} 
+        <Pressable 
+          style={({ pressed }) => [
+            styles.googleButton, 
+            pressed && { opacity: 0.7 }
+          ]} 
           onPress={handleGoogleSignIn}
           disabled={isLoading || loading}
         >
           <Text style={styles.googleButtonText}>🔍 Continue with Google</Text>
-        </TouchableOpacity>
+        </Pressable>
 
         <TouchableOpacity style={styles.signUpLink} onPress={navigateToSignUp}>
           <Text style={styles.signUpText}>
@@ -211,6 +250,8 @@ const createStyles = (theme: any) => StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 6,
+    cursor: 'pointer',
+    userSelect: 'none',
   },
   signInButtonText: {
     color: '#FFFFFF',
@@ -256,10 +297,26 @@ const createStyles = (theme: any) => StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    cursor: 'pointer',
+    userSelect: 'none',
   },
   googleButtonText: {
     color: theme.colors.text,
     fontSize: theme.typography.fontSizes.lg,
     fontWeight: theme.typography.fontWeights.medium,
+  },
+  errorContainer: {
+    backgroundColor: '#fee',
+    borderWidth: 1,
+    borderColor: '#fcc',
+    borderRadius: theme.borderRadius.md,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  errorText: {
+    color: '#c33',
+    fontSize: theme.typography.fontSizes.sm,
+    fontWeight: theme.typography.fontWeights.medium,
+    textAlign: 'center',
   },
 });

@@ -1,15 +1,16 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { parseAuthError, AuthError } from '../utils/authErrors';
 
 interface AuthContextValue {
   session: Session | null;
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error?: any }>;
-  signUp: (email: string, password: string, name?: string) => Promise<{ error?: any }>;
-  signInWithGoogle: () => Promise<{ error?: any }>;
-  signOut: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ error?: AuthError; success?: boolean }>;
+  signUp: (email: string, password: string, name?: string) => Promise<{ error?: AuthError; success?: boolean; requiresVerification?: boolean }>;
+  signInWithGoogle: () => Promise<{ error?: AuthError; success?: boolean }>;
+  signOut: () => Promise<{ error?: AuthError; success?: boolean }>;
   refreshSession: () => Promise<void>;
 }
 
@@ -25,31 +26,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('AuthContext: Initializing...');
     let mounted = true;
 
-    // Get initial session with timeout
+    // Get initial session
     const getInitialSession = async () => {
-      console.log('AuthContext: Getting initial session...');
       try {
-        // Add timeout to prevent hanging
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session fetch timeout')), 10000)
-        );
-        
-        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]);
+        const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('AuthContext: Error getting session:', error);
         }
         
         if (mounted) {
-          console.log('AuthContext: Initial session result:', {
-            hasSession: !!session,
-            user: session?.user?.email || 'No user',
-            sessionId: session?.access_token?.substring(0, 10) + '...' || 'No token'
-          });
           setSession(session);
           setUser(session?.user ?? null);
           setLoading(false);
@@ -64,18 +52,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     };
 
-    // Initialize session immediately
     getInitialSession();
 
     // Listen for auth changes
-    console.log('AuthContext: Setting up auth listener...');
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('AuthContext: Auth state change:', event, {
-        hasSession: !!session,
-        user: session?.user?.email || 'No user'
-      });
+      console.log('AuthContext: Auth state change:', event);
       
       if (mounted) {
         setSession(session);
@@ -85,55 +68,97 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
 
     return () => {
-      console.log('AuthContext: Cleaning up...');
       mounted = false;
       subscription.unsubscribe();
     };
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        const parsedError = parseAuthError(error);
+        return { error: parsedError, success: false };
+      }
+      
+      return { success: true };
+    } catch (error) {
+      const parsedError = parseAuthError(error);
+      return { error: parsedError, success: false };
+    }
   };
 
   const signUp = async (email: string, password: string, name?: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name: name || '',
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name || '',
+          },
         },
-      },
-    });
-    return { error };
+      });
+      
+      if (error) {
+        const parsedError = parseAuthError(error);
+        return { error: parsedError, success: false };
+      }
+      
+      // Check if user needs email verification
+      const hasUser = !!data?.user;
+      const hasSession = !!data?.session;
+      
+      if (hasUser && !hasSession) {
+        // User created but needs verification
+        return { success: true, requiresVerification: true };
+      } else if (hasUser && hasSession) {
+        // User created and logged in immediately
+        return { success: true, requiresVerification: false };
+      }
+      
+      return { success: true };
+    } catch (error) {
+      const parsedError = parseAuthError(error);
+      return { error: parsedError, success: false };
+    }
   };
 
   const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/(tabs)`,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/(tabs)`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
-      },
-    });
-    return { error };
+      });
+      
+      if (error) {
+        const parsedError = parseAuthError(error);
+        return { error: parsedError, success: false };
+      }
+      
+      return { success: true };
+    } catch (error) {
+      const parsedError = parseAuthError(error);
+      return { error: parsedError, success: false };
+    }
   };
 
   const refreshSession = async () => {
-    console.log('Manually refreshing session...');
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
       if (error) {
         console.error('Error refreshing session:', error);
       } else {
-        console.log('Manual refresh result:', session?.user?.email || 'No user');
         setSession(session);
         setUser(session?.user ?? null);
       }
@@ -143,7 +168,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        const parsedError = parseAuthError(error);
+        return { error: parsedError, success: false };
+      } else {
+        // Clear local state immediately
+        setSession(null);
+        setUser(null);
+        return { success: true };
+      }
+    } catch (error) {
+      const parsedError = parseAuthError(error);
+      // Force clear state even if signOut fails
+      setSession(null);
+      setUser(null);
+      return { error: parsedError, success: false };
+    }
   };
 
   const value: AuthContextValue = {
