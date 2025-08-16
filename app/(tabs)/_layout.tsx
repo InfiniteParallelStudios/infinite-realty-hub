@@ -1,29 +1,48 @@
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
+import { useTheme } from '../../useTheme';
 
 export default function TabLayout() {
+  const { theme } = useTheme();
+  
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#999',
+        tabBarActiveTintColor: theme.colors.tabActive,
+        tabBarInactiveTintColor: theme.colors.tabInactive,
+        headerStyle: {
+          backgroundColor: theme.colors.background,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border,
+          shadowColor: theme.colors.shadow,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.2,
+          shadowRadius: 4,
+          elevation: 4,
+        },
+        headerTintColor: theme.colors.text,
+        headerTitleStyle: {
+          color: theme.colors.text,
+          fontSize: theme.typography.fontSizes.lg,
+          fontWeight: theme.typography.fontWeights.semibold,
+        },
         tabBarStyle: Platform.select({
           ios: {
-            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+            backgroundColor: theme.colors.tabBackground,
             borderTopWidth: 0,
             position: 'absolute',
             bottom: 0,
             left: 0,
             right: 0,
             elevation: 0,
-            shadowColor: '#000',
+            shadowColor: theme.colors.shadow,
             shadowOffset: { width: 0, height: -3 },
             shadowOpacity: 0.1,
             shadowRadius: 3,
           },
           default: {
-            backgroundColor: '#fff',
-            borderTopColor: '#e0e0e0',
+            backgroundColor: theme.colors.tabBackground,
+            borderTopColor: theme.colors.border,
           },
         }),
       }}
